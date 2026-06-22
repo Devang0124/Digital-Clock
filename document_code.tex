@@ -1,0 +1,562 @@
+\documentclass[11pt,a4paper]{article}
+
+% ... [Keep all the packages and color definitions from your original code] ...
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=2.2cm,top=2.6cm,bottom=2.8cm,headsep=14pt]{geometry}
+\usepackage{charter}                       
+\usepackage{helvet}                        
+\renewcommand{\ttdefault}{pcr}             
+\usepackage[table]{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,decorations.pathreplacing,calc,shadows,fit,backgrounds}
+\usepackage{circuitikz}
+\usepackage[skins,breakable]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+
+% --- COLOUR PALETTE ---
+\definecolor{pcbDark}{HTML}{0B3D2E}      
+\definecolor{pcbDark2}{HTML}{102A2A}     
+\definecolor{copper}{HTML}{C26B2F}       
+\definecolor{copperLight}{HTML}{E8A559}  
+\definecolor{circuitGold}{HTML}{C9A227}  
+\definecolor{traceGray}{HTML}{4F5B5A}    
+\definecolor{pcbMint}{HTML}{EAF5EF}      
+\definecolor{copperTint}{HTML}{FBEEDF}   
+\definecolor{warnTint}{HTML}{FDECEC}     
+\definecolor{warnRed}{HTML}{B23A2E}
+\definecolor{lineGray}{HTML}{C8D2CF}
+
+% ... [Keep your section styling and boxes] ...
+\newtcolorbox{codebox}[1][Get the Code Here]{%
+  enhanced, breakable, colback=copperTint, colframe=copper,
+  boxrule=0.8pt, left=10pt, right=10pt, top=10pt, bottom=10pt,
+  arc=3pt, fonttitle=\sffamily\bfseries\large, coltitle=white,
+  colbacktitle=copper, title={#1}
+}
+\newcommand{\sectiondivider}{
+  \vspace{20pt} % Space above the divider
+  \noindent
+  \begin{tikzpicture}
+    % Draws a faint line across the whole page
+    \draw[traceGray!30, line width=1pt] (0,0) -- (\linewidth,0);
+    % Draws a central copper trace with two gold via holes
+    \draw[copper, line width=1.5pt] (\linewidth/2 - 1cm, 0) -- (\linewidth/2 + 1cm, 0);
+    \fill[circuitGold] (\linewidth/2 - 1cm, 0) circle (2.5pt);
+    \fill[circuitGold] (\linewidth/2 + 1cm, 0) circle (2.5pt);
+  \end{tikzpicture}
+  \vspace{10pt} % Space below the divider
+}
+
+\begin{document}
+
+% =========================================================
+%  NEW SCHEMATIC-STYLE TITLE PAGE
+% =========================================================
+\begin{titlepage}
+\begin{tikzpicture}[remember picture, overlay]
+    % Draw a thin technical border
+    \draw[line width=0.5pt, color=lineGray] 
+        ($(current page.north west) + (1cm,-1cm)$) rectangle ($(current page.south east) + (-1cm,1cm)$);
+
+    % Corner Decorations (Copper Traces style)
+    \begin{scope}[line width=2pt, color=copper!60]
+        % Top Right
+        \draw ($(current page.north east) + (-1cm,-3cm)$) -- ++(0,2cm) -- ++(-2cm,0);
+        \draw ($(current page.north east) + (-1.4cm,-3cm)$) -- ++(0,1.6cm) -- ++(-1.6cm,0);
+        \fill[circuitGold] ($(current page.north east) + (-1cm,-3cm)$) circle (3pt);
+        
+        % Bottom Left
+        \draw ($(current page.south west) + (1cm,3cm)$) -- ++(0,-2cm) -- ++(2cm,0);
+        \draw ($(current page.south west) + (1.4cm,3cm)$) -- ++(0,-1.6cm) -- ++(1.6cm,0);
+        \fill[circuitGold] ($(current page.south west) + (1cm,3cm)$) circle (3pt);
+    \end{scope}
+
+    % Central Content
+    \node[anchor=center] at (current page.center) {
+        \begin{minipage}{14cm}
+            \centering
+            \sffamily
+            
+            {\fontsize{38}{44}\selectfont \textbf{\textcolor{pcbDark}{THE DIGITAL CLOCK}}}\\[0.4cm]
+            {\fontsize{18}{22}\selectfont \textcolor{copper}{Hardware Design \& Build Guide}}\\
+            
+            \begin{tikzpicture}
+                \draw[copper, line width=1.5pt] (0,1) -- (4,1);
+            \end{tikzpicture}\\[1.5cm]
+            
+            \justify
+            \textcolor{pcbDark2!80}{This technical guide documents the design, assembly, and firmware implementation of a digital clock. Utilizing the ATmega328P, the project covers multiple display driving, crystal-controlled timing precision, and custom enclosure fabrication.}\\[1cm]
+            
+            \centering
+            \renewcommand{\arraystretch}{1.4}
+            \begin{tabular}{|l l|}
+                \hline
+                \rowcolor{pcbMint} \textbf{SPECIFICATION} & \textbf{VALUE} \\
+                \hline
+                Controller & ATmega328P-PU \\
+                Clock Source & 16 MHz Crystal \\
+                Display Type & 4-Digit 7-Segment \\
+                Power Supply & 5V DC via USB-B \\
+                \hline
+            \end{tabular}
+        \end{minipage}
+    };
+\end{tikzpicture}
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+% =========================================================
+\section{Theory of Operation}
+% =========================================================
+A digital clock is fundamentally a highly precise counting machine. To build a reliable standalone clock, every single component in our parts list plays a critical role in keeping the system stable, accurate, and safe.
+
+\subsection*{The Brain: 1x ATmega328P Microcontroller}
+The ATmega328P chip acts as the central processing unit. Using a hardware timer, it independently counts the microscopic pulses from the crystal oscillator. Every time it reaches exactly 16 million, it knows one exact second has passed, updating the display and internal time variables accordingly.
+
+\subsection*{The Heartbeat: Timing \& Oscillation}
+\begin{itemize}
+    \item \textbf{1x 16\,MHz Crystal Oscillator:} This is the metronome of the circuit. When a voltage is applied, the quartz crystal physically vibrates exactly 16,000,000 times per second. 
+    \item \textbf{2x 22\,pF Capacitors:} Placed on pins 9 and 10 to Ground, these act as shock absorbers. They stabilize the crystal's electrical resonance, ensuring it starts up reliably and maintains its precise frequency without drifting.
+\end{itemize}
+
+\subsection*{Power \& Stability}
+\begin{itemize}
+    \item \textbf{1x Type-B Power Supply:} Provides the steady 5V DC required to run the microcontroller and illuminate the LEDs.
+    \item \textbf{2x 100\,nF Capacitors:} Placed directly across the power pins (7 \& 8, and 20 \& 22), these act as tiny local energy reserves. They filter out high-frequency noise and supply instant bursts of current during display multiplexing, preventing the chip from freezing or crashing.
+\end{itemize}
+
+\subsection*{Logic Protection: Hardware Reset}
+\begin{itemize}
+    \item \textbf{1x 10\,k$\Omega$ Resistor:} Tied from 5V to Pin 1 (RESET), this securely "pulls up" the pin's voltage to a constant HIGH state. If left disconnected (floating), Pin 1 acts like an antenna, picking up random room noise that could spontaneously reset your clock to 12:00.
+\end{itemize}
+
+\subsection*{The Display: Multiplexing \& Protection}
+\begin{itemize}
+    \item \textbf{4x 7-Segment Displays:} We don't have enough pins to drive every single LED directly. Instead, we tie common segments together and rapidly cycle power to one digit at a time (Multiplexing/Persistence of Vision).
+    \item \textbf{7x 330\,$\Omega$ Resistors:} Placed in series with the segment pins (A-G). LEDs will pull as much current as available until they destroy themselves. These resistors strictly limit the current, protecting both the ATmega328P and the display from burning out.
+    \item \textbf{2x Red LEDs \& 2x 330\,$\Omega$ Resistors:} Used for the blinking center colon. Each LED gets its own current-limiting resistor.
+\end{itemize}
+
+\subsection*{User Interface}
+\begin{itemize}
+    \item \textbf{3x Push Buttons:} Used to set the hours, minutes, and mode.
+\end{itemize}
+\newpage
+% =========================================================
+\section{Step 1: Breadboard Testing with Arduino}
+% =========================================================
+
+\subsection*{Wiring the Power Rails}
+First, we need to establish a common power and ground line on the breadboard.
+\begin{itemize}
+    \item \textbf{Arduino 5V} $\rightarrow$ Breadboard Positive (+) Rail.
+    \item \textbf{Arduino GND} $\rightarrow$ Breadboard Negative (-) Rail.
+\end{itemize}
+
+\subsection*{Wiring the Display Segments (The "Shapes")}
+The segments (A through G) are the individual light bars that make up the numbers. 
+\begin{itemize}
+    \item \textbf{Connection:} Connect Arduino Digital Pins \textbf{D2 through D8} to the corresponding segment pins (A through G) on the display.
+    \item \textbf{The Protection:} You \textbf{must} place a \textbf{330\,$\Omega$ resistor} in series with each of these 7 wires. This limits the current flowing from the Arduino, ensuring the LEDs inside the display do not burn out.
+\end{itemize}
+
+\subsection*{Wiring the Digit Selects (The "Multiplexing")}
+These pins act as the common ground (or power) for each of the four numbers, allowing us to turn them on and off rapidly.
+\begin{itemize}
+    \item \textbf{Connection:} Connect Arduino Digital Pins \textbf{D9, D10, D11, and D12} directly to the Digit 1, Digit 2, Digit 3, and Digit 4 pins on the display, respectively.
+\end{itemize}
+
+\subsection*{Wiring the Colon LEDs (The "Heartbeat")}
+To separate the hours and minutes, we use two standard red LEDs placed in the center of the display.
+\begin{itemize}
+    \item \textbf{Connection:} Connect Arduino Analog Pin \textbf{A3} to the long legs (Anodes) of both red LEDs. 
+    \item \textbf{The Protection:} Connect the short legs (Cathodes) of both LEDs to the Breadboard Negative (-) Rail, placing a \textbf{330\,$\Omega$ resistor} in series for each LED to protect them.
+\end{itemize}
+
+\subsection*{Wiring the User Interface (Push Buttons)}
+We need three buttons to set the clock: Hour, Minute, and Mode. We are using a clever code trick called \texttt{INPUT\_PULLUP}, which turns on internal resistors inside the Arduino. Because of this, we only need to wire the buttons to Ground, saving us from using external resistors on the breadboard.
+\begin{itemize}
+    \item \textbf{Hour Button:} Connect one leg to Arduino Analog Pin \textbf{A0}. Connect the other leg to the Negative (-) Rail.
+    \item \textbf{Minute Button:} Connect one leg to Arduino Analog Pin \textbf{A1}. Connect the other leg to the Negative (-) Rail.
+    \item \textbf{Mode Button:} Connect one leg to Arduino Analog Pin \textbf{A2}. Connect the other leg to the Negative (-) Rail.
+\end{itemize}
+With the wiring complete, connect the Arduino to your computer via USB and upload the clock code.
+
+
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{
+\begin{circuitikz}[line width=0.8pt, font=\sffamily]
+
+  % --- ARDUINO UNO MICROCONTROLLER ---
+  \draw[draw=pcbDark, fill=pcbMint, rounded corners=4pt, line width=1.2pt] (0, 0) rectangle (3, 14);
+  \node[font=\sffamily\Large\bfseries, pcbDark, rotate=90] at (1.5, 7) {ARDUINO UNO};
+
+  % --- 4-DIGIT DISPLAY BLOCK ---
+  \draw[draw=pcbDark2, fill=white, rounded corners=4pt, line width=1.2pt] (10, 7) rectangle (13, 13.5);
+  \node[font=\sffamily\bfseries, align=center, pcbDark2] at (11.5, 10.25) {4-DIGIT\\DISPLAY};
+
+  % --- DISPLAY SEGMENTS WITH 330 OHM RESISTORS (D2-D8) ---
+  \foreach \y/\pin/\seg in {13/D2/A, 12.25/D3/B, 11.5/D4/C, 10.75/D5/D, 10/D6/E, 9.25/D7/F, 8.5/D8/G} {
+    \node[anchor=east, font=\scriptsize\bfseries] at (3, \y) {\pin};
+    \node[anchor=west, font=\scriptsize\bfseries] at (10, \y) {\seg};
+    \draw[color=copper, line width=1pt] (3, \y) -- (4, \y) to[R, l=$330\,\Omega$] (8.5, \y) -- (10, \y);
+  }
+
+  % --- DIGIT SELECTS (D9-D12) ---
+  \foreach \y/\pin/\dig in {7.5/D9/D1, 6.75/D10/D2, 6/D11/D3, 5.25/D12/D4} {
+    \node[anchor=east, font=\scriptsize\bfseries] at (3, \y) {\pin};
+    \draw[color=circuitGold!80!black, line width=1pt] (3, \y) -- (8.5, \y) node[anchor=west, font=\scriptsize\bfseries, pcbDark] {\dig };
+  }
+
+  % --- COLON LEDS (A3) ---
+  \node[anchor=east, font=\scriptsize\bfseries] at (3, 4) {A3};
+  \draw[color=warnRed, line width=1pt] (3, 4) -- (4, 4) |- (5, 4.5) 
+        to[led, l=Colon 1] (7, 4.5) to[R, l=$330\,\Omega$] (9, 4.5) node[ground]{};
+  \draw[color=warnRed, line width=1pt] (4, 4) |- (5, 3.5) 
+        to[led] (7, 3.5) to[R, l=$330\,\Omega$] (9, 3.5) node[ground]{};
+
+  % --- USER INTERFACE BUTTONS (A0, A1, A2) ---
+  \node[anchor=east, font=\scriptsize\bfseries] at (3, 2) {A0 (Hr)};
+  \draw[color=traceGray, line width=1pt] (3, 2) -- (4, 2) to[push button] (7, 2) node[ground]{};
+
+  \node[anchor=east, font=\scriptsize\bfseries] at (3, 1) {A1 (Min)};
+  \draw[color=traceGray, line width=1pt] (3, 1) -- (4, 1) to[push button] (7, 1) node[ground]{};
+
+  \node[anchor=east, font=\scriptsize\bfseries] at (3, 0.25) {A2 (Mode)};
+  \draw[color=traceGray, line width=1pt] (3, 0.25) -- (4, 0.25) to[push button] (7, 0.25) node[ground]{};
+
+\end{circuitikz}
+}
+\caption{Detailed Electronic Schematic for Prototype Testing.}
+\end{figure}
+\sectiondivider
+% =========================================================
+\section{Step 2: Preparing the Bare Chip (Bootloader)}
+% =========================================================
+
+\subsection*{Phase 1: Configure the Arduino Uno as a Programmer}
+Before we wire the bare chip, we must give the Arduino Uno the instructions it needs to act as a programmer.
+\begin{enumerate}
+    \item Plug the standard Arduino Uno into your computer via USB.
+    \item Open the Arduino IDE. Go to \textbf{File > Examples > 11.ArduinoISP > ArduinoISP}.
+    \item Select your standard Uno board and port, then click \textbf{Upload}.
+    \item Once the upload finishes, \textbf{unplug the Arduino from your computer.}
+\end{enumerate}
+
+\subsection*{Phase 2: Build the Target Circuit}
+Place your bare ATmega328P chip straddling the center trench of a blank breadboard. 
+
+\textbf{1. Power \& Stability:}
+\begin{itemize}
+    \item \textbf{Power Lines:} Connect Uno \textbf{5V} to chip Pins \textbf{7 and 20}. Connect Uno \textbf{GND} to chip Pins \textbf{8 and 22}.
+    \item \textbf{Clock Signal:} Place the \textbf{16\,MHz Crystal} across chip Pins \textbf{9 and 10}. Connect a \textbf{22\,pF capacitor} from Pin 9 to GND, and another from Pin 10 to GND.
+    \item \textbf{Target Reset:} Connect a \textbf{10\,k$\Omega$ resistor} from 5V to chip Pin \textbf{1 (RESET)}.
+\end{itemize}
+
+\textbf{2. The Data Lines (ISP):}
+\begin{itemize}
+    \item \textbf{Programmer Reset:} Connect Uno Pin \textbf{D10} to chip Pin \textbf{1 (RESET)}.
+    \item \textbf{MOSI (Master Out Slave In):} Connect Uno Pin \textbf{D11} to chip Pin \textbf{17}.
+    \item \textbf{MISO (Master In Slave Out):} Connect Uno Pin \textbf{D12} to chip Pin \textbf{18}.
+    \item \textbf{SCK (Serial Clock):} Connect Uno Pin \textbf{D13} to chip Pin \textbf{19}.
+\end{itemize}
+
+ To stop automatic reset, place a \textbf{10\,$\mu$F capacitor} on the Arduino Uno itself, connecting its \textbf{RESET} pin to its \textbf{GND} pin. 
+
+\subsection*{Phase 3: Burn the Bootloader}
+With everything wired, plug the Uno back into your computer. 
+\begin{enumerate}
+    \item In the Arduino IDE, go to \textbf{Tools > Board} and select \textbf{Arduino Uno} (This tells the IDE what type of bootloader to put on the bare chip).
+    \item Go to \textbf{Tools > Programmer} and change it from the default to \textbf{"Arduino as ISP"}.
+    \item Click \textbf{Tools > Burn Bootloader}. 
+\end{enumerate}
+The TX/RX lights on your Uno will flash wildly for about 30 seconds. When you see "Done burning bootloader" at the bottom of the screen, your bare chip is officially ready to become a standalone clock!
+\newpage
+\begin{figure}
+\centering
+\resizebox{1.1\textwidth}{!}{
+\begin{circuitikz}[line width=0.8pt, font=\sffamily]
+
+  % --- ARDUINO UNO PROGRAMMER (Left Block) ---
+  \draw[thick] (0, 0) rectangle (3, 5);
+  \node[font=\bfseries, align=center] at (1.5, 4.2) {Arduino Uno\\(ISP)};
+
+  % 10uF Capacitor on Uno Reset
+  \node[anchor=west, font=\scriptsize] at (0, 3) {RESET};
+  \node[anchor=west, font=\scriptsize] at (0, 2) {GND};
+  \draw (0, 3) -- (-1.5, 3) to[pC, l=$10\,\mu$F] (-1.5, 2) -- (0, 2);
+
+  % --- BARE ATMEGA328P TARGET (Right Block) ---
+  \draw[thick] (7, 0) rectangle (10, 5);
+  \node[font=\bfseries, align=center] at (8.5, 4.2) {ATmega328P\\(Target)};
+
+  % --- ISP DATA LINES (Middle) ---
+  % D10 to Pin 1 (RST)
+  \node[anchor=east, font=\scriptsize] at (3, 3.5) {D10};
+  \node[anchor=west, font=\scriptsize] at (7, 3.5) {Pin 1};
+  \draw (3, 3.5) -- (7, 3.5);
+  % 10k Pullup Resistor on Pin 1
+  \draw (6, 3.5) to[short, *-] (6, 4.5) to[R, l=$10\,\text{k}\Omega$] (6, 5.5) node[vcc]{5V};
+
+  % D11 to Pin 17 (MOSI)
+  \node[anchor=east, font=\scriptsize] at (3, 2.5) {D11};
+  \node[anchor=west, font=\scriptsize] at (7, 2.5) {Pin 17};
+  \draw (3, 2.5) -- (7, 2.5);
+
+  % D12 to Pin 18 (MISO)
+  \node[anchor=east, font=\scriptsize] at (3, 1.5) {D12};
+  \node[anchor=west, font=\scriptsize] at (7, 1.5) {Pin 18};
+  \draw (3, 1.5) -- (7, 1.5);
+
+  % D13 to Pin 19 (SCK)
+  \node[anchor=east, font=\scriptsize] at (3, 0.5) {D13};
+  \node[anchor=west, font=\scriptsize] at (7, 0.5) {Pin 19};
+  \draw (3, 0.5) -- (7, 0.5);
+
+  % --- POWER & OSCILLATOR (Right Side) ---
+  % Power Lines
+  \node[anchor=east, font=\scriptsize] at (10, 3.5) {Pins 7, 20};
+  \draw (10, 3.5) -- (11.5, 3.5) node[vcc]{5V};
+
+  \node[anchor=east, font=\scriptsize] at (10, 2.5) {Pins 8, 22};
+  \draw (10, 2.5) -- (11.5, 2.5) node[ground]{};
+
+  % 16MHz Crystal and Capacitors
+  \node[anchor=east, font=\scriptsize] at (10, 1.5) {Pin 9};
+  \node[anchor=east, font=\scriptsize] at (10, 0.5) {Pin 10};
+  
+  \draw (10, 1.5) -- (11, 1.5) |- (11.5, 1.2) to[xtal, l=16\,MHz] (11.5, 0.8) -| (11, 0.5) -- (10, 0.5);
+  \draw (11.5, 1.2) -- (13, 1.2) to[C] (13, 0.2) node[ground]{};
+  \draw (11.5, 0.8) -- (14.5, 0.8) to[C, l=$22\,\text{pF}$] (14.5, -0.2) node[ground]{};
+
+\end{circuitikz}
+}
+\caption{In-System Programming (ISP) Wiring Diagram.}
+\end{figure}
+\sectiondivider
+% =========================================================
+\section{Step 3: Standalone Hardware Testing}
+% =========================================================
+Now that the ATmega328P has the bootloader, it is ready to run independently. Disconnect the Arduino Uno completely. We will now build the bare chip's "life support" and interface circuitry directly onto the breadboard.
+
+\subsection*{Phase 1: Life Support \& Power}
+Before connecting the display, we must ensure the microcontroller has stable power and precise timing.
+\begin{enumerate}
+    \item \textbf{Type-B Power Supply:} Connect the 5V output to your breadboard's positive rail, and GND to the negative rail.
+    \item \textbf{Chip Power:} Connect ATmega Pins \textbf{7 (VCC)} and \textbf{20 (AVCC)} to the 5V rail. Connect Pins \textbf{8 (GND)} and \textbf{22 (GND)} to the GND rail.
+    \item \textbf{Bypass Capacitors:} Place one \textbf{100\,nF capacitor} directly across Pins 7 and 8. Place the second \textbf{100\,nF capacitor} across Pins 20 and 22.
+    \item \textbf{Reset Pull-up:} Connect the \textbf{10\,k$\Omega$ resistor} from the 5V rail to Pin \textbf{1 (RESET)}.
+    \item \textbf{The Oscillator:} Place the \textbf{16\,MHz Crystal} across Pins \textbf{9 and 10}. Connect one \textbf{22\,pF capacitor} from Pin 9 to GND, and the other from Pin 10 to GND.
+\end{enumerate}
+
+\subsection*{Phase 2: Display \& Interface Wiring}
+Now we attach the peripherals using the same logical layout as our prototype test, but wired directly to the ATmega328P's physical pins.
+\begin{enumerate}
+    \item \textbf{7-Segment Display:} Connect ATmega Pins \textbf{4, 5, 6, 11, 12, 13, and 14} (which correspond to Arduino D2-D8) to the segment pins A-G on the display. \textbf{Crucial:} Place a \textbf{330\,$\Omega$ resistor} in series with each of these 7 lines.
+    \item \textbf{Digit Selects:} Connect ATmega Pins \textbf{15, 16, 17, and 18} (Arduino D9-D12) directly to the Digit 1-4 pins on the display.
+    \item \textbf{Colon LEDs:} Connect ATmega Pin \textbf{26} (Arduino A3) to the Anodes (long legs) of both \textbf{Red LEDs}. Connect the Cathodes (short legs) to GND, placing a \textbf{330\,$\Omega$ resistor} in series for each LED.
+    \item \textbf{Buttons:} Connect the Hour, Minute, and Mode buttons to ATmega Pins \textbf{23, 24, and 25} (Arduino A0-A2). Connect the other side of all three buttons directly to GND.
+\end{enumerate}
+
+\subsection*{Phase 3: Uploading the Clock Code}
+To upload the final code without a USB port on the chip, reconnect the SPI programming wires from Step 2 (D10, D11, D12, D13 to the chip). In the Arduino IDE, open your clock code, and instead of clicking the standard upload arrow, click \textbf{Sketch > Upload Using Programmer}. Once done, remove the SPI wires. Your standalone clock is now running!
+
+\begin{figure}
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tikzpicture}[
+  node distance=1.5cm and 2.5cm,
+  box/.style={draw=pcbDark, fill=pcbMint, line width=1pt, rounded corners, align=center, font=\sffamily, shadow},
+  wire/.style={-stealth, line width=1.2pt, color=copper}
+]
+
+% --- CENTRAL MICROCONTROLLER ---
+\node[box, minimum width=3.5cm, minimum height=8.5cm, fill=pcbDark2, text=white] (atmega) { 
+    \textbf{\Large ATmega328P} \\[10pt] 
+    \textit{\small Standalone MCU} 
+};
+
+% --- LEFT SIDE: LIFE SUPPORT ---
+\node[box, minimum width=3.5cm, minimum height=1.5cm, left=3.5cm of atmega.145, anchor=east] (power) { 
+    \textbf{5V Power Supply} \\ \small (Type-B USB) 
+};
+
+\node[box, minimum width=3.5cm, minimum height=1.5cm, left=3.5cm of atmega.180, anchor=east] (clock) { 
+    \textbf{16\,MHz Oscillator} \\ \small (+ 2x 22pF Caps) 
+};
+
+\node[box, minimum width=3.5cm, minimum height=1.5cm, left=3.5cm of atmega.215, anchor=east] (reset) { 
+    \textbf{Hardware Reset} \\ \small (10k$\Omega$ Resistor) 
+};
+
+% --- RIGHT SIDE: PERIPHERALS ---
+\node[box, minimum width=4cm, minimum height=2.5cm, right=3.5cm of atmega.35, anchor=west] (display) { 
+    \textbf{4-Digit Display} \\ \small (7-Segment) 
+};
+
+\node[box, minimum width=4cm, minimum height=1.5cm, right=3.5cm of atmega.340, anchor=west] (leds) { 
+    \textbf{Colon LEDs} \\ \small (2x Red LEDs)
+};
+
+\node[box, minimum width=4cm, minimum height=1.5cm, right=3.5cm of atmega.305, anchor=west] (buttons) { 
+    \textbf{Push Buttons} \\ \small (Hour, Min, Mode) 
+};
+
+% --- WIRING CONNECTIONS (LEFT) ---
+
+% Power Wires
+\draw[wire, color=pcbDark] (power.east) -- 
+    node[above, font=\sffamily\footnotesize\bfseries] {Pins 7, 20} 
+    node[below, font=\sffamily\scriptsize, color=traceGray] {w/ 2x 100nF Bypass Caps} 
+    (atmega.145);
+
+% Clock Wires
+\draw[wire, color=traceGray] (clock.east) -- 
+    node[above, font=\sffamily\footnotesize\bfseries] {Pins 9 \& 10} 
+    (atmega.180);
+
+% Reset Wires
+\draw[wire, color=warnRed] (reset.east) -- 
+    node[above, font=\sffamily\footnotesize\bfseries] {Pin 1 (to 5V)} 
+    (atmega.215);
+
+% --- WIRING CONNECTIONS (RIGHT) ---
+
+% Display Segments
+\draw[wire] (atmega.45) -- 
+    node[above, font=\sffamily\footnotesize\bfseries, color=pcbDark] {Pins 4-6, 11-14} 
+    node[below, font=\sffamily\scriptsize, color=traceGray] {via 7x 330\,$\Omega$ Resistors} 
+    (display.160);
+
+% Display Digits
+\draw[wire] (atmega.15) -- 
+    node[above, font=\sffamily\footnotesize\bfseries, color=pcbDark] {Pins 15-18 (Digits)} 
+    node[below, font=\sffamily\scriptsize, color=traceGray] {Direct Connection} 
+    (display.195);
+
+% LED Wires
+\draw[wire] (atmega.340) -- 
+    node[above, font=\sffamily\footnotesize\bfseries, color=pcbDark] {Pin 26 (A3)} 
+    node[below, font=\sffamily\scriptsize, color=traceGray] {to GND via 2x 330\,$\Omega$} 
+    (leds.west);
+
+% Button Wires
+\draw[wire] (atmega.305) -- 
+    node[above, font=\sffamily\footnotesize\bfseries, color=pcbDark] {Pins 23, 24, 25} 
+    node[below, font=\sffamily\scriptsize, color=traceGray] {Other legs directly to GND} 
+    (buttons.west);
+
+\end{tikzpicture}
+}
+\caption{System Block Wiring Diagram for the Standalone Circuit.}
+\end{figure}
+\sectiondivider
+\newpage
+% =========================================================
+\section{Step 4: Permanent Assembly (Soldering)}
+% =========================================================
+Once your breadboard prototype is running flawlessly, it is time to make the circuit permanent. We will transfer the components from the breadboard to a perforated circuit board (perfboard) and solder them into place.
+
+\subsection*{Phase 1: Component Placement}
+Before turning on your soldering iron, dry-fit all your components onto the perfboard to plan your layout. 
+\begin{itemize}
+    \item Place the 28-pin DIP socket in the center.
+    \item Group the "Life Support" components (Crystal, 22\,pF capacitors, 100\,nF capacitors, and 10\,k$\Omega$ resistor) as tightly around the socket as possible. \textbf{Note:} The crystal and its capacitors must be placed immediately next to pins 9 and 10 to prevent timing issues.
+    \item Place the display, colon LEDs, and buttons where they will be easily accessible when mounted in the final case.
+\end{itemize}
+
+
+\subsection*{Phase 2: Soldering the Circuit}
+Once you are happy with the layout, flip the board over and begin soldering.
+\begin{enumerate}
+    \item \textbf{Tack it down:} Solder two opposite corners of the DIP socket and the display first so they don't fall out while you work on the rest of the board.
+    \item \textbf{Solder the components:} Solder the legs of all the remaining components. Snip off the excess wire from the resistors and capacitors using flush cutters.
+    \item \textbf{Route the traces:} Using the snipped-off legs from your resistors (or thin, solid-core wire), create the connections between the pins on the underside of the board. Follow the exact same routing you used on the breadboard in Step 3.
+    \item \textbf{The Resistors:} Do not forget to solder the 330\,$\Omega$ current-limiting resistors inline between the ATmega pins and the display segments!
+\end{enumerate}
+
+
+
+\subsection*{Phase 3: Final Testing}
+Visually inspect the underside of your board for "solder bridges"—accidental blobs of solder connecting two adjacent pads that shouldn't be touching. Once verified, insert the ATmega328P into its socket (ensure the notch on the chip matches the notch on the socket). Plug in your 5V power supply, and your permanent clock should light up immediately!
+% --- ACTUAL IMAGE 1 ---
+\begin{figure}[H]
+\centering
+% Replace 'my_layout_photo.jpg' with your actual file name
+\includegraphics[width=0.8\textwidth]{board.jpeg} 
+\caption{Recommended component layout on the dotboard.}
+\end{figure}
+\vspace{10pt}
+
+% --- ACTUAL IMAGE 2 ---
+\begin{figure}[H]
+\centering
+% Replace 'soldered_board.png' with your actual file name
+\includegraphics[width=0.8\textwidth]{board_back.jpeg} 
+\caption{The fully soldered standalone clock back.}
+\end{figure}
+\sectiondivider
+\newpage
+% =========================================================
+\section{Step 5: 3D Printing the Snap-Fit Enclosure}
+% =========================================================
+To protect our soldered circuit and give the clock a premium, finished look, we are using a custom 3D-printed enclosure. Instead of relying on metal screws or messy glue, this case uses a clever mechanical "snap-fit" design.
+
+\subsection*{The Snap-Fit Mechanism}
+The enclosure is divided into two parts: a deep bottom tray to house the electronics, and a top lid to frame the display. 
+\begin{itemize}
+    \item \textbf{The Interlock:} Notice the raised sections along the inner walls of the case. These feature tiny horizontal lips. When the two halves are pushed together, the plastic slightly flexes, allowing the lips to slide past each other before snapping back into place, locking the case shut.
+    \item \textbf{No Hardware Required:} This design relies entirely on the natural flexibility of thermoplastics like PLA or PETG, making assembly instant and tool-free.
+\end{itemize}
+
+
+\subsection*{Slicing and Printing Tips}
+When printing snap-fit joints, precision and layer adhesion are critical. A joint that is too tight won't close, and one that is too loose will fall apart.
+\begin{enumerate}
+    \item \textbf{Material Choice:} PLA works great for indoor clocks and is stiff enough for a solid "snap." If you want the tabs to be more durable and flexible, consider using PETG.
+    \item \textbf{Layer Height:} Use a finer layer height (like 0.16\,mm or 0.20\,mm). Snap-fit lips are small details; a coarse layer height might make the locking tabs too rough to slide smoothly.
+    \item \textbf{Orientation:} Print both shells flat on their backs. This ensures the interlocking tabs are built horizontally, which prevents them from snapping off under pressure due to weak layer adhesion.
+\end{enumerate}
+
+
+
+\subsection*{Final Assembly}
+Once your parts are printed and cooled off the build plate, it is time for the final assembly:
+\begin{enumerate}
+    \item \textbf{Insert the Board:} Gently lower your soldered perfboard into the bottom tray. Ensure the power cable has a clear path out of the back of the case and the push buttons align with their designated spots.
+    \item \textbf{Align the Lid:} Place the top lid over the tray, ensuring the cutout perfectly frames the 7-segment display.
+    \item \textbf{The Snap:} Press down firmly and evenly on all four corners of the lid. You should hear a satisfying plastic "click" as the interlocking tabs engage. 
+\end{enumerate}
+
+Plug in the USB power supply and set the time.
+\vspace{10pt}
+
+\vspace{10pt}
+% --- ACTUAL IMAGE 1 (BOTTOM SHELL) ---
+\begin{figure}[H]
+\centering
+% Replace 'bottom_shell.png' with your actual file name
+\includegraphics[width=0.85\textwidth]{bottom.png} 
+\caption{The deep bottom tray.}
+\end{figure}
+\vspace{10pt}
+% --- ACTUAL IMAGE 2 (TOP LID) ---
+\begin{figure}[H]
+\centering
+% Replace 'top_lid.png' with your actual file name
+\includegraphics[width=0.85\textwidth]{top.png} 
+\caption{The top lid.}
+\end{figure}
+\vspace{10pt}
+\end{document}
